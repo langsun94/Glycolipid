@@ -1,0 +1,1380 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+---
+
+# 0 count trials were replaced with the average count of 0.5 [based on limit of detection/2], as 0 cannot be log transferred for statistical analysis.
+
+# load library
+```{r}
+library(nlme)
+library(car)
+library(multcompView)
+library(multcomp)
+library(lsmeans)
+library(rcompanion)
+library(dplyr)
+library(reshape2)
+library(ggplot2)
+library(FSA)
+library(tibble)
+```
+
+
+# 1. H8-237 (Paenibacillus odorifer)
+## 1.1.vegetative cells
+### 1.1.1.whole milk
+```{r}
+#analysis ref:http://rcompanion.org/handbook/I_09.html
+
+wm<-read.csv("/Volumes/efs/CANR/Ansci/D\'Amico\ Lab/Langsun_las17015/3.\ Glycolipid\ project/data/bacilli\ stats/H8_237_wm.csv",header = T)
+wm<-subset(wm, day!=0)
+
+
+# The autocorrelation structure
+model.a = gls(log10 ~ concen + day + concen*day,
+             data=wm)
+ACF(model.a,
+    form = ~ day | rep)
+
+
+# model
+
+model = gls(log10 ~ concen + day + concen*day,
+            correlation = corAR1(form = ~ day | rep,
+                                 value = 0.2017),
+            data=wm,
+            method="REML")
+
+
+# vairance analysis
+Anova(model)
+
+# residule 
+x = residuals(model)
+plotNormalHistogram(x)
+
+# posthoc
+marginal = lsmeans(model,~concen*day, cov.reduce = FALSE)
+
+pairs = as.data.frame(pairs(marginal,
+      adjust="tukey"))
+pairs
+
+Sum = Summarize(log10 ~ concen*day ,
+                    data   = wm,
+                    conf   = 0.95,
+                    digits = 3,
+                    traditional = FALSE,
+                    percentile  = TRUE)
+
+Sum
+# add asterisk compared to control
+sig=c(" ","***"," "," ",
+      " ","***"," "," ",
+      " ","***"," "," ",
+      " ","***"," "," ",
+      " ","***"," "," ",
+      " ","***"," "," ")
+
+sum1<-cbind(Sum,sig)
+
+sum1$concen.ord<-factor(sum1$concen,c("PC","50","100","200"))
+
+pd = position_dodge(.2)
+
+a1=sum1
+p.a1=ggplot(a1, aes(x = day,y = mean, shape = concen.ord)) + 
+    geom_point(size=2) +  
+    scale_shape_manual(values=c(3,15,16,17),labels = c("Control","50", "100", "200")) + 
+    geom_line(size=0.4) +
+    geom_errorbar(aes(ymin=mean-sd,ymax=mean+sd),width=.3, size=0.5) +
+    geom_text(aes(label = a1$sig), vjust=2.5) + 
+    theme_bw() +
+    geom_hline(yintercept=4.2, linetype="dashed") +
+    theme(legend.title=element_blank(),panel.grid=element_blank(),legend.position="bottom",text = element_text(size=8),axis.text=element_text(size=8),legend.text=element_text(size=8)) +
+    ylab(expression(~italic("P. odorifer")~" (log CFU/mL) ")) + xlab("Time (d)") + ylim(0,8.5)
+
+    #ggtitle("Whole milk")
+
+
+#ggsave(p,file="~/Desktop/H8-237.wm.jpeg",dpi=300,height = 4, width = 6)
+```
+
+
+### 1.1.2.skim milk
+```{r}
+#analysis ref:http://rcompanion.org/handbook/I_09.html
+
+sm<-read.csv("/Volumes/efs/CANR/Ansci/D\'Amico\ Lab/Langsun_las17015/3.\ Glycolipid\ project/data/bacilli\ stats/H8_237_sm.csv",header = T)
+sm<-subset(sm, day!=0)
+
+
+#The autocorrelation structure
+library(nlme)
+model.a = gls(log10 ~ concen + day + concen*day,
+             data=sm)
+ACF(model.a,
+    form = ~ day | rep)
+
+
+# model
+
+model = gls(log10 ~ concen + day + concen*day,
+            correlation = corAR1(form = ~ day | rep,
+                                 value = 0.3288),
+            data=sm,
+            method="REML")
+
+# variance analysis
+Anova(model)
+
+# residule 
+x = residuals(model)
+plotNormalHistogram(x)
+
+#posthoc
+marginal = lsmeans(model,~ concen*day, cov.reduce = FALSE)
+
+pairs = as.data.frame(pairs(marginal,
+      adjust="tukey"))
+pairs
+
+sm$log10 <- log10(sm$average*(10^(-sm$dilution)))
+sm$log10[sm$log10 == "-Inf"] <- "0"
+sm$log10<-as.numeric(sm$log10)
+
+Sum = Summarize(log10 ~ concen*day ,
+                    data   = sm,
+                    conf   = 0.95,
+                    digits = 3,
+                    traditional = FALSE,
+                    percentile  = TRUE)
+Sum
+
+# add asterisk compared to control
+sig=c(" ","***","***"," ",
+      " ","***","***"," ",
+      " ","***","***"," ",
+      " ","      ***","***"," ",
+      " ","***","***"," ",
+      " ","***","***"," ")
+
+sum1<-cbind(Sum,sig)
+
+sum1$concen.ord<-factor(sum1$concen,c("PC","1","25","50"))
+
+pd = position_dodge(.2)
+
+rm.bl.limit<-sum1
+rm.bl.limit$mean[rm.bl.limit$mean == "0"] <- "NA"
+rm.bl.limit$mean<-as.numeric(rm.bl.limit$mean)
+
+a2=rm.bl.limit
+p.a2=ggplot(a2, aes(x = day,y = mean, shape = concen.ord)) + 
+    geom_point(size=2) +  
+    scale_shape_manual(values=c(3,15,16,17),labels = c("Control","1", "25", "50")) + 
+    geom_line(size=0.4) +
+    geom_errorbar(aes(ymin=mean-sd,ymax=mean+sd),width=.3, size=0.7) +
+    geom_text(aes(label = a2$sig), vjust=2.2) + 
+    geom_text(aes(x=5, y=0.2,label = "^"), size=5, vjust=1.5) + 
+    geom_text(aes(x=7, y=0.2,label = "^"), size=5, vjust=1.5) + 
+    geom_text(aes(x=14, y=0.2,label = "^"), size=5, vjust=1.5) + 
+    geom_text(aes(x=21, y=0.2,label = "^"), size=5, vjust=1.5) + 
+    theme_bw() +
+    geom_hline(yintercept=4.12, linetype="dashed") +
+    theme(legend.title=element_blank(),panel.grid=element_blank(),legend.position="bottom",text = element_text(size=8),axis.text=element_text(size=8),legend.text=element_text(size=8)) +
+    ylab(expression(~italic("P. odorifer")~" (log CFU/mL) ")) + xlab("Time (d)") + ylim(0,8.5) 
+    #ggtitle("Skim milk")
+
+
+#ggsave(p,file="~/Desktop/H8-237.sm.jpeg",dpi=300,height = 4, width = 6)
+```
+
+## 1.2. spores
+```{r}
+h<-read.csv("/Volumes/efs/CANR/Ansci/D\'Amico\ Lab/Langsun_las17015/3.\ Glycolipid\ project/data/bacilli\ stats/spores/H8_237.csv",header = T)
+```
+
+
+### 1.2.1. spores in whole milk
+```{r}
+# spores
+s.wm<-subset(h,!(h$milk=="skim"|h$cell=="TC"))
+
+# model 
+model = lm(log10 ~ factor(time)*con.,
+           data = s.wm)
+
+# variance analysis
+Anova(model, type = "II") 
+
+# residules
+x = residuals(model)
+plotNormalHistogram(x)
+
+marginal = lsmeans(model,~ time*con.)
+
+pairs = pairs(marginal,adjust="tukey")
+pairs
+
+Sum= Summarize(log10 ~ time * con.,
+          data=s.wm,
+          digits=3)
+Sum
+
+# add asterisk compared to control
+sig=c(" "," "," "," "," "," "," ",
+      " "," "," "," "," "," "," ",
+      " "," "," "," "," "," "," ")
+
+sum1<-cbind(Sum,sig)
+
+pd = position_dodge(.2)
+
+p = ggplot(sum1, aes(x = time,y = mean, shape = con., color=con.)) + geom_point(size=4, position=pd) + geom_line() +
+    geom_errorbar(aes(ymin=mean-sd,
+                      ymax=mean+sd),
+                   width=.2, size=0.7, position=pd)  + scale_shape_discrete() + scale_color_grey(start = 0, end = 0.7) +
+    geom_text(aes(label = sum1$sig,y=mean), hjust=-0.5) +
+    theme_bw() +
+    theme(legend.title=element_blank(),panel.grid=element_blank(),legend.position="top") +
+    ylab(expression(~italic("Paenibacillus odorifer")~" spore counts (log CFU/mL)")) + xlab("Time (h)") + ylim(0,8.5)
+
+p
+#ggsave(p,file="~/Desktop/H8-237.wm.s.png",height = 7, width = 10)
+
+```
+
+```{r}
+# total cell
+tc.wm<-subset(h,!(h$milk=="skim"|h$cell=="S"))
+
+# model 
+model = lm(log10 ~ factor(time)*con.,
+           data = tc.wm)
+
+# variance analysis
+Anova(model, type = "II") 
+
+# residules
+x = residuals(model)
+plotNormalHistogram(x)
+
+marginal = lsmeans(model,~ time*con.)
+
+pairs = pairs(marginal,adjust="tukey")
+pairs
+
+Sum= Summarize(log10 ~ time * con.,
+          data=tc.wm,
+          digits=3)
+Sum
+
+# add asterisk compared to control
+sig=c(" "," "," "," "," "," "," ",
+      " "," ","***","***","***","***","***",
+      " "," "," "," "," "," "," ")
+
+sum1<-cbind(Sum,sig)
+
+pd = position_dodge(.2)
+
+p = ggplot(sum1, aes(x = time,y = mean, shape = con., color=con.)) + geom_point(size=4, position=pd) + geom_line() +
+    geom_errorbar(aes(ymin=mean-sd,
+                      ymax=mean+sd),
+                   width=.2, size=0.7, position=pd)  + scale_shape_discrete() + scale_color_grey(start = 0, end = 0.7) +
+    geom_text(aes(label = sum1$sig,y=mean), hjust=-0.5) +
+    theme_bw() +
+    theme(legend.title=element_blank(),panel.grid=element_blank()) +
+    ylab(expression(~italic("Paenibacillus odorifer")~" total counts (log CFU/mL)")) + xlab("Time (h)") + ylim(0,8.5)
+
+p
+#ggsave(p,file="~/Desktop/H8-237.wm.tc.png",height = 7, width = 10)
+
+```
+
+### Paenibacillus odorifer s+tc figure whole milk
+```{r}
+po.wm<-subset(h,!(h$milk=="skim"))
+
+Sum = Summarize(log10 ~ concen*time ,
+                    data   = po.wm,
+                    conf   = 0.95,
+                    digits = 3,
+                    traditional = FALSE,
+                    percentile  = TRUE)
+Sum
+
+Sum$concen.ord<-factor(Sum$concen,c("control_tc","control_s","200_tc","200_s","400_tc","400_s"))
+
+a3=Sum
+p.a3=ggplot(a3, aes(x = time,y = mean, shape = concen.ord)) + 
+    geom_point(size=2) +  
+    scale_shape_manual(values=c(15,0,16,1,17,2),
+                       labels = c("Control_total cell","Control_spore",
+                                  "200_total cell","200_spore",
+                                  "400_total cell","400_spore")) + 
+    geom_line(size=0.4) + guides(shape = guide_legend(nrow = 2)) + 
+    #geom_errorbar(aes(ymin=mean-sd,ymax=mean+sd),width=.5, size=0.5) +
+    theme_bw() +
+    geom_hline(yintercept=4.02, linetype="dashed") +
+    theme(legend.title=element_blank(),panel.grid=element_blank(),legend.position="bottom",text = element_text(size=8),axis.text=element_text(size=8),legend.text=element_text(size=8)) +
+    ylab(expression(~italic("P. odorifer")~" (log CFU/mL) ")) + xlab("Time (h)") + ylim(0,7.5) 
+    #ggtitle("Whole milk")
+
+
+#ggsave(p,file="~/Desktop/H8-237.wm_spore.jpeg",dpi=300,height = 4.5, width = 5)
+
+```
+
+### 1.2.2. spores in skim milk
+```{r}
+# spores
+s.sm<-subset(h,!(h$milk=="whole"|h$cell=="TC"))
+
+# model 
+model = lm(log10 ~ factor(time)*con.,
+           data = s.sm)
+
+# variance analysis
+Anova(model, type = "II") 
+
+# residules
+x = residuals(model)
+plotNormalHistogram(x)
+
+marginal = lsmeans(model,~ time*con.)
+
+pairs = pairs(marginal,adjust="tukey")
+pairs
+
+Sum= Summarize(log10 ~ time * con.,
+          data=s.sm,
+          digits=3)
+Sum
+
+# add asterisk compared to control
+sig=c(" "," "," "," "," "," "," ",
+      " "," "," "," "," "," "," ",
+      " "," "," "," "," "," "," ")
+
+sum1<-cbind(Sum,sig)
+
+pd = position_dodge(.2)
+
+p = ggplot(sum1, aes(x = time,y = mean, shape = con., color=con.)) + geom_point(size=4, position=pd) + geom_line() +
+    geom_errorbar(aes(ymin=mean-sd,
+                      ymax=mean+sd),
+                   width=.2, size=0.7, position=pd)  + scale_shape_discrete() + scale_color_grey(start = 0, end = 0.7) +
+    geom_text(aes(label = sum1$sig,y=mean), hjust=-0.5) +
+    theme_bw() +
+    theme(legend.title=element_blank(),panel.grid=element_blank()) +
+    ylab(expression(~italic("Paenibacillus odorifer")~" spore counts (log CFU/mL)")) + xlab("Time (h)") + ylim(0,8.5)
+
+p
+#ggsave(p,file="~/Desktop/H8-237.sm.s.png",height = 7, width = 10)
+```
+
+```{r}
+# total cell
+tc.sm<-subset(h,!(h$milk=="whole"|h$cell=="S"))
+
+# model 
+model = lm(log10 ~ factor(time)*con.,
+           data = tc.sm)
+
+# variance analysis
+Anova(model, type = "II") 
+
+# residules
+x = residuals(model)
+plotNormalHistogram(x)
+
+marginal = lsmeans(model,~ time*con.)
+
+pairs = pairs(marginal,adjust="tukey")
+pairs
+
+Sum= Summarize(log10 ~ time * con.,
+          data=tc.sm,
+          digits=3)
+Sum
+
+# add asterisk compared to control
+sig=c(" "," "," "," "," "," "," ",
+      " "," "," "," "," "," "," ",
+      " "," "," "," "," "," "," ")
+
+sum1<-cbind(Sum,sig)
+
+pd = position_dodge(.2)
+
+p = ggplot(sum1, aes(x = time,y = mean, shape = con., color=con.)) + geom_point(size=4, position=pd) + geom_line() +
+    geom_errorbar(aes(ymin=mean-sd,
+                      ymax=mean+sd),
+                   width=.2, size=0.7, position=pd)  + scale_shape_discrete() + scale_color_grey(start = 0, end = 0.7) +
+    geom_text(aes(label = sum1$sig,y=mean), hjust=-0.5) +
+    theme_bw() +
+    theme(legend.title=element_blank(),panel.grid=element_blank()) +
+    ylab(expression(~italic("Paenibacillus odorifer")~" total counts (log CFU/mL)")) + xlab("Time (h)") + ylim(0,8.5)
+
+p
+#ggsave(p,file="~/Desktop/H8-237.sm.tc.png",height = 7, width = 10)
+```
+
+### Paenibacillus odorifer s+tc figure skim milk
+```{r}
+po.sm<-subset(h,!(h$milk=="whole"))
+
+Sum = Summarize(log10 ~ concen*time ,
+                    data   = po.sm,
+                    conf   = 0.95,
+                    digits = 3,
+                    traditional = FALSE,
+                    percentile  = TRUE)
+Sum
+
+Sum$concen.ord<-factor(Sum$concen,c("control_tc","control_s","25_tc","25_s","50_tc","50_s"))
+
+a4=Sum
+p.a4=ggplot(a4, aes(x = time,y = mean, shape = concen.ord)) + 
+    geom_point(size=2) +  
+    scale_shape_manual(values=c(15,0,16,1,17,2),
+                       labels = c("Control_total cell","Control_spore",
+                                  "25_total cell","25_spore",
+                                  "50_total cell","50_spore")) + 
+    geom_line(size=0.4) +
+    #geom_errorbar(aes(ymin=mean-sd,ymax=mean+sd),width=.5, size=0.5) +
+    theme_bw() +
+    geom_hline(yintercept=4.02, linetype="dashed") +
+    theme(legend.title=element_blank(),panel.grid=element_blank(),legend.position="bottom",text = element_text(size=8),axis.text=element_text(size=8),legend.text=element_text(size=8)) +
+    ylab(expression(~italic("P. odorifer")~" (log CFU/mL) ")) + xlab("Time (h)") + ylim(0,7.5) 
+    #ggtitle("Skim milk")
+
+
+#ggsave(p,file="~/Desktop/H8-237.sm_spore.jpeg",dpi=300,height = 4.5, width = 5)
+
+```
+
+
+# 2.R5-213 (Viridibacillus arenosi)
+## 2.1.vegetative cells
+### 2.1.1. whole milk
+```{r}
+#analysis ref:http://rcompanion.org/handbook/I_09.html
+
+wm<-read.csv("/Volumes/efs/CANR/Ansci/D\'Amico\ Lab/Langsun_las17015/3.\ Glycolipid\ project/data/bacilli\ stats/R5_213_wm.csv",header = T)
+wm<-subset(wm,wm$day!="0")
+
+# The autocorrelation structure
+model.a = gls(log10 ~ concen + day + concen*day,
+             data=wm)
+ACF(model.a,
+    form = ~ day | rep)
+
+
+# model
+
+model = gls(log10 ~ concen + day + concen*day,
+            correlation = corAR1(form = ~ day | rep,
+                                 value = 0.1530),
+            data=wm,
+            method="REML")
+
+
+# vairance analysis
+Anova(model)
+
+# residule 
+x = residuals(model)
+plotNormalHistogram(x)
+
+# posthoc
+marginal = lsmeans(model,~concen*day, cov.reduce = FALSE)
+
+pairs = as.data.frame(pairs(marginal,
+      adjust="tukey"))
+pairs
+
+Sum = Summarize(log10 ~ concen*day ,
+                    data   = wm,
+                    conf   = 0.95,
+                    digits = 3,
+                    traditional = FALSE,
+                    percentile  = TRUE)
+
+Sum
+
+# add asterisk compared to control
+sig=c(" ","***"," "," ",
+      " ","***"," "," ",
+      " ","***"," "," ",
+      " ","***"," "," ",
+      " "," "," "," ",
+      " "," "," "," ")
+
+sum1<-cbind(Sum,sig)
+
+sum1$concen.ord<-factor(sum1$concen,c("PC","50","100","200"))
+
+pd = position_dodge(.2)
+
+c1=sum1
+p.c1=ggplot(c1, aes(x = day,y = mean, shape = concen.ord)) + 
+    geom_point(size=2) +  
+    scale_shape_manual(values=c(3,15,16,17),labels = c("Control","50", "100", "200")) + 
+    geom_line(size=0.4) +
+    geom_errorbar(aes(ymin=mean-sd,ymax=mean+sd),width=.3, size=0.7) +
+    geom_text(aes(label = c1$sig), vjust=2.5) + 
+    theme_bw() +
+    geom_hline(yintercept=3.78, linetype="dashed") +
+    theme(legend.title=element_blank(),panel.grid=element_blank(),legend.position="bottom",text = element_text(size=8),axis.text=element_text(size=8),legend.text=element_text(size=8)) +
+    ylab(expression(~italic("V. arenosi")~" (log CFU/mL) ")) + xlab("Time (d)") + ylim(0,8.5) 
+    #ggtitle("Whole milk")
+
+
+#ggsave(p,file="~/Desktop/R5-213.wm.jpeg",dpi=300,height = 4, width = 6)
+```
+
+
+
+### 2.1.2. skim milk 
+```{r}
+#analysis ref:http://rcompanion.org/handbook/I_09.html
+
+sm<-read.csv("/Volumes/efs/CANR/Ansci/D\'Amico\ Lab/Langsun_las17015/3.\ Glycolipid\ project/data/bacilli\ stats/R5_213_sm.csv",header = T)
+sm<-subset(sm, day!=0)
+
+#The autocorrelation structure
+model.a = gls(log10 ~ concen + day + concen*day,
+             data=sm)
+ACF(model.a,
+    form = ~ day | rep)
+
+
+# model
+
+model = gls(log10 ~ concen + day + concen*day,
+            correlation = corAR1(form = ~ day | rep,
+                                 value = 0.1538),
+            data=sm,
+            method="REML")
+
+
+# vairance analysis
+Anova(model)
+
+# residule 
+x = residuals(model)
+plotNormalHistogram(x)
+
+#posthoc
+marginal = lsmeans(model,~ concen*day, cov.reduce = FALSE)
+
+pairs = as.data.frame(pairs(marginal,
+      adjust="tukey"))
+pairs
+
+sm$log10 <- log10(sm$average*(10^(-sm$dilution)))
+sm$log10[sm$log10 == "-Inf"] <- "0"
+sm$log10<-as.numeric(sm$log10)
+
+Sum = Summarize(log10 ~ concen*day ,
+                    data   = sm,
+                    conf   = 0.95,
+                    digits = 3,
+                    traditional = FALSE,
+                    percentile  = TRUE)
+Sum
+
+# add asterisk compared to control
+sig=c(" ","***","***"," ",
+      " ","***","***"," ",
+      " ","***","***"," ",
+      " ","***","***"," ",
+      " ","***"," "," ",
+      " ","***"," "," ")
+
+sum1<-cbind(Sum,sig)
+
+sum1$concen.ord<-factor(sum1$concen,c("PC","10","50","100"))
+
+pd = position_dodge(.2)
+
+rm.bl.limit<-sum1
+rm.bl.limit$mean[rm.bl.limit$mean == "0"] <- "NA"
+rm.bl.limit$mean<-as.numeric(rm.bl.limit$mean)
+
+c2=rm.bl.limit
+p.c2=ggplot(c2, aes(x = day,y = mean, shape = concen.ord)) + 
+    geom_point(size=2) +  
+    scale_shape_manual(values=c(3,15,16,17),labels = c("Control","10", "50", "100")) + 
+    geom_line(size=0.4) +
+    geom_errorbar(aes(ymin=mean-sd,ymax=mean+sd),width=.3, size=0.7) +
+    geom_text(aes(label = c2$sig), vjust=2.3) + 
+    geom_text(aes(x=3, y=0.2,label = "^"), size=5, vjust=1.5) + 
+    geom_text(aes(x=7, y=0.2,label = "^"), size=5, vjust=1.5) + 
+    geom_text(aes(x=14, y=0.2,label = "^"), size=5, vjust=1.5) + 
+    geom_text(aes(x=21, y=0.2,label = "^"), size=5, vjust=1.5) + 
+    theme_bw() +
+    geom_hline(yintercept=3.74, linetype="dashed") +
+    theme(legend.title=element_blank(),panel.grid=element_blank(),legend.position="bottom",text = element_text(size=8),axis.text=element_text(size=8),legend.text=element_text(size=8)) +
+    ylab(expression(~italic("V. arenosi")~" (log CFU/mL) ")) + xlab("Time (d)") + ylim(-0.5,8) 
+    #ggtitle("Skim milk")
+
+#ggsave(p,file="~/Desktop/R5-213.sm.jpeg",dpi=300,height = 4, width = 6)
+```
+
+
+
+## 2.2.spores
+```{r}
+r<-read.csv("/Volumes/efs/CANR/Ansci/D\'Amico\ Lab/Langsun_las17015/3.\ Glycolipid\ project/data/bacilli\ stats/spores/R5_213.csv",header = T)
+```
+### 2.2.1. spores in whole milk
+```{r}
+# spores
+s.wm<-subset(r,!(r$milk=="skim"|r$cell=="TC"))
+
+# model 
+model = lm(log10 ~ factor(time)*con.,
+           data = s.wm)
+
+# variance analysis
+Anova(model, type = "II") 
+
+# residules
+x = residuals(model)
+plotNormalHistogram(x)
+
+marginal = lsmeans(model,~ time*con.)
+
+pairs = pairs(marginal,adjust="tukey")
+pairs
+
+Sum= Summarize(log10 ~ time * con.,
+          data=s.wm,
+          digits=3)
+Sum
+
+# add asterisk compared to control
+sig=c(" "," "," "," "," "," "," ",
+      " "," "," ","***","***","***","***",
+      " "," "," "," "," "," "," ")
+
+sum1<-cbind(Sum,sig)
+
+pd = position_dodge(.2)
+
+p = ggplot(sum1, aes(x = time,y = mean, shape = con., color=con.)) + geom_point(size=4, position=pd) + geom_line() +
+    geom_errorbar(aes(ymin=mean-sd,
+                      ymax=mean+sd),
+                   width=.2, size=0.7, position=pd)  + scale_shape_discrete() + scale_color_grey(start = 0, end = 0.7) +
+    geom_text(aes(label = sum1$sig,y=mean), hjust=-0.5) +
+    theme_bw() +
+    theme(legend.title=element_blank(),panel.grid=element_blank()) +
+    ylab(expression(~italic("Viridibacillus arenosi")~" spore counts (log CFU/mL)")) + xlab("Time (h)") + ylim(0,8.5)
+
+p
+#ggsave(p,file="~/Desktop/R5-213.wm.s.png",height = 7, width = 10)
+
+```
+
+```{r}
+# total cell
+tc.wm<-subset(r,!(r$milk=="skim"|r$cell=="S"))
+
+# model 
+model = lm(log10 ~ factor(time)*con.,
+           data = tc.wm)
+
+# variance analysis
+Anova(model, type = "II") 
+
+# residules
+x = residuals(model)
+plotNormalHistogram(x)
+
+marginal = lsmeans(model,~ time*con.)
+
+pairs = pairs(marginal,adjust="tukey")
+pairs
+
+Sum= Summarize(log10 ~ time * con.,
+          data=tc.wm,
+          digits=3)
+Sum
+
+# add asterisk compared to control
+sig=c(" ","***"," "," "," "," "," ",
+      " ","***","***","***","***","***","***",
+      " "," "," "," "," "," "," ")
+
+sum1<-cbind(Sum,sig)
+
+pd = position_dodge(.2)
+
+p = ggplot(sum1, aes(x = time,y = mean, shape = con., color=con.)) + geom_point(size=4, position=pd) + geom_line() +
+    geom_errorbar(aes(ymin=mean-sd,
+                      ymax=mean+sd),
+                   width=.2, size=0.7, position=pd)  + scale_shape_discrete() + scale_color_grey(start = 0, end = 0.7) +
+    geom_text(aes(label = sum1$sig,y=mean), hjust=-0.5) +
+    theme_bw() +
+    theme(legend.title=element_blank(),panel.grid=element_blank()) +
+    ylab(expression(~italic("Viridibacillus arenosi")~" total counts (log CFU/mL)")) + xlab("Time (h)") + ylim(0,8.5)
+
+p
+#ggsave(p,file="~/Desktop/R5-213.wm.tc.png",height = 7, width = 10)
+
+```
+
+### Viridibacillus arenosi s+tc figure whole milk
+```{r}
+va.wm<-subset(r,!(r$milk=="skim"))
+
+Sum = Summarize(log10 ~ concen*time ,
+                    data   = va.wm,
+                    conf   = 0.95,
+                    digits = 3,
+                    traditional = FALSE,
+                    percentile  = TRUE)
+Sum
+
+Sum$concen.ord<-factor(Sum$concen,c("control_tc","control_s","200_tc","200_s","400_tc","400_s"))
+
+c3=Sum
+p.c3=ggplot(c3, aes(x = time,y = mean, shape = concen.ord)) + 
+    geom_point(size=2) +  
+    scale_shape_manual(values=c(15,0,16,1,17,2),
+                       labels = c("Control_total cell","Control_spore",
+                                  "200_total cell","200_spore",
+                                  "400_total cell","400_spore")) + 
+    geom_line(size=0.4) +
+    #geom_errorbar(aes(ymin=mean-sd,ymax=mean+sd),width=.5, size=0.5) +
+    theme_bw() +
+    geom_hline(yintercept=4.02, linetype="dashed") +
+    theme(legend.title=element_blank(),panel.grid=element_blank(),legend.position="bottom",text = element_text(size=8),axis.text=element_text(size=8),legend.text=element_text(size=8)) +
+    ylab(expression(~italic("V. arenosi")~" (log CFU/mL) ")) + xlab("Time (h)") + ylim(0,8.5) 
+    #ggtitle("Whole milk")
+
+
+#ggsave(p,file="~/Desktop/R5_213.wm_spore.jpeg",dpi=300,height = 4.5, width = 5)
+
+```
+
+
+### 2.2.2. spores in skim milk
+```{r}
+# spores
+s.sm<-subset(r,!(r$milk=="whole"|r$cell=="TC"))
+
+# model 
+model = lm(log10 ~ factor(time)*con.,
+           data = s.sm)
+
+# variance analysis
+Anova(model, type = "II") 
+
+# residules
+x = residuals(model)
+plotNormalHistogram(x)
+
+marginal = lsmeans(model,~ time*con.)
+
+pairs = pairs(marginal,adjust="tukey")
+pairs
+
+Sum= Summarize(log10 ~ time * con.,
+          data=s.sm,
+          digits=3)
+Sum
+
+# add asterisk compared to control
+sig=c(" "," "," "," "," "," "," ",
+      " "," "," "," "," "," "," ",
+      " "," "," "," "," "," "," ")
+
+sum1<-cbind(Sum,sig)
+
+pd = position_dodge(.2)
+
+p = ggplot(sum1, aes(x = time,y = mean, shape = con., color=con.)) + geom_point(size=4, position=pd) + geom_line() +
+    geom_errorbar(aes(ymin=mean-sd,
+                      ymax=mean+sd),
+                   width=.2, size=0.7, position=pd)  + scale_shape_discrete() + scale_color_grey(start = 0, end = 0.7) +
+    geom_text(aes(label = sum1$sig,y=mean), hjust=-0.5) +
+    theme_bw() +
+    theme(legend.title=element_blank(),panel.grid=element_blank()) +
+    ylab(expression(~italic("Viridibacillus arenosi")~" spore counts (log CFU/mL)")) + xlab("Time (h)") + ylim(0,8.5)
+
+p
+#ggsave(p,file="~/Desktop/R5-213.sm.s.png",height = 7, width = 10)
+```
+
+```{r}
+# total cell
+tc.sm<-subset(r,!(r$milk=="whole"|r$cell=="S"))
+
+# model 
+model = lm(log10 ~ factor(time)*con.,
+           data = tc.sm)
+
+# variance analysis
+Anova(model, type = "II") 
+
+# residules
+x = residuals(model)
+plotNormalHistogram(x)
+
+marginal = lsmeans(model,~ time*con.)
+
+pairs = pairs(marginal,adjust="tukey")
+pairs
+
+Sum= Summarize(log10 ~ time * con.,
+          data=tc.sm,
+          digits=3)
+Sum
+
+# add asterisk compared to control
+sig=c(" ","***"," "," "," "," "," ",
+      " "," "," "," "," "," "," ",
+      " "," "," "," "," "," "," ")
+
+sum1<-cbind(Sum,sig)
+
+pd = position_dodge(.2)
+
+p = ggplot(sum1, aes(x = time,y = mean, shape = con., color=con.)) + geom_point(size=4, position=pd) + geom_line() +
+    geom_errorbar(aes(ymin=mean-sd,
+                      ymax=mean+sd),
+                   width=.2, size=0.7, position=pd)  + scale_shape_discrete() + scale_color_grey(start = 0, end = 0.7) +
+    geom_text(aes(label = sum1$sig,y=mean), hjust=-0.5) +
+    theme_bw() +
+    theme(legend.title=element_blank(),panel.grid=element_blank()) +
+    ylab(expression(~italic("Viridibacillus arenosi")~" total counts (log CFU/mL)")) + xlab("Time (h)") + ylim(0,8.5)
+
+p
+#ggsave(p,file="~/Desktop/R5-213.sm.tc.png",height = 7, width = 10)
+```
+
+### Viridibacillus arenosi s+tc figure skim milk
+```{r}
+va.sm<-subset(r,!(r$milk=="whole"))
+
+Sum = Summarize(log10 ~ concen*time ,
+                    data   = va.sm,
+                    conf   = 0.95,
+                    digits = 3,
+                    traditional = FALSE,
+                    percentile  = TRUE)
+Sum
+
+Sum$concen.ord<-factor(Sum$concen,c("control_tc","control_s","50_tc","50_s","100_tc","100_s"))
+
+c4=Sum
+p.c4=ggplot(c4, aes(x = time,y = mean, shape = concen.ord)) + 
+    geom_point(size=2) +  
+    scale_shape_manual(values=c(15,0,16,1,17,2),
+                       labels = c("Control_total cell","Control_spore",
+                                  "50_total cell","50_spore",
+                                  "100_total cell","100_spore")) + 
+    geom_line(size=0.4) +
+    #geom_errorbar(aes(ymin=mean-sd,ymax=mean+sd),width=.5, size=0.5) +
+    theme_bw() +
+    geom_hline(yintercept=4.02, linetype="dashed") +
+    theme(legend.title=element_blank(),panel.grid=element_blank(),legend.position="bottom",text = element_text(size=8),axis.text=element_text(size=8),legend.text=element_text(size=8)) +
+    ylab(expression(~italic("V. arenosi")~" (log CFU/mL) ")) + xlab("Time (h)") + ylim(0,8.5) 
+    #ggtitle("Skim milk")
+
+
+#ggsave(p,file="~/Desktop/R5-213.sm_spore.jpeg",dpi=300,height = 4.5, width = 5)
+
+```
+
+
+
+# 3. M7-669 (Bacillus weihenstephanensis)
+## 3.1 vegetative cells
+### 3.1.1. whole milk
+```{r}
+#analysis ref:http://rcompanion.org/handbook/I_09.html
+
+wm<-read.csv("/Volumes/efs/CANR/Ansci/D\'Amico\ Lab/Langsun_las17015/3.\ Glycolipid\ project/data/bacilli\ stats/M7_669_wm.csv",header = T)
+wm<-subset(wm,wm$day!="0")
+
+#The autocorrelation structure
+library(nlme)
+model.a = gls(log10 ~ concen + day + concen*day,
+             data=wm)
+ACF(model.a,
+    form = ~ day | rep)
+
+
+# model
+
+model = gls(log10 ~ concen + day + concen*day,
+            correlation = corAR1(form = ~ day | rep,
+                                 value = 0.036),
+            data=wm,
+            method="REML")
+
+
+# vairance analysis
+Anova(model)
+
+# residule 
+x = residuals(model)
+plotNormalHistogram(x)
+
+# posthoc
+marginal = lsmeans(model,~concen*day, cov.reduce = FALSE)
+
+pairs = as.data.frame(pairs(marginal,
+      adjust="tukey"))
+pairs
+
+
+wm$log10 <- log10(wm$average*(10^(-wm$dilution)))
+wm$log10[wm$log10 == "-Inf"] <- "0"
+wm$log10<-as.numeric(wm$log10)
+
+Sum = Summarize(log10 ~ concen*day ,
+                    data   = wm,
+                    conf   = 0.95,
+                    digits = 3,
+                    traditional = FALSE,
+                    percentile  = TRUE)
+
+Sum
+
+# add asterisk compared to control
+sig=c(" ","***"," "," ",
+      " ","***"," "," ",
+      "**","***"," "," ",
+      "***","***"," "," ",
+      "***","***"," "," ",
+      "**","***"," "," ")
+
+sum1<-cbind(Sum,sig)
+
+sum1$concen.ord<-factor(sum1$concen,c("PC","50","100","200"))
+
+pd = position_dodge(.2)
+
+rm.bl.limit<-sum1
+rm.bl.limit$mean[rm.bl.limit$mean == "0"] <- "NA"
+rm.bl.limit$mean<-as.numeric(rm.bl.limit$mean)
+
+b1=rm.bl.limit
+p.b1=ggplot(b1, aes(x = day,y = mean, shape = concen.ord)) + 
+    geom_point(size=2) +  
+    scale_shape_manual(values=c(3,15,16,17),labels = c("Control","50", "100", "200")) + 
+    geom_line(size=0.4) +
+    geom_errorbar(aes(ymin=mean-sd,ymax=mean+sd),width=.3, size=0.7) +
+    geom_text(aes(label = b1$sig), vjust=2.5) + 
+    geom_text(aes(x=1, y=0.2,label = "^"), size=5, vjust=1.5) + 
+    geom_text(aes(x=3, y=0.2,label = "^"), size=5, vjust=1.5) + 
+    geom_text(aes(x=7, y=0.2,label = "^"), size=5, vjust=1.5) + 
+    geom_text(aes(x=14, y=0.2,label = "^"), size=5, vjust=1.5) + 
+    geom_text(aes(x=21, y=0.2,label = "^"), size=5, vjust=1.5) + 
+    theme_bw() +
+    geom_hline(yintercept=4.26, linetype="dashed") +
+    theme(legend.title=element_blank(),panel.grid=element_blank(),legend.position="bottom",text = element_text(size=8),axis.text=element_text(size=8),legend.text=element_text(size=8)) +
+    ylab(expression(~italic("B. weihenstephanensis")~" (log CFU/mL) ")) + xlab("Time (d)") + ylim(0,8.5) 
+    #ggtitle("Whole milk")
+
+
+#ggsave(p,file="~/Desktop/M7-669.wm.jpeg",dpi=300,height = 4, width = 6)
+```
+
+### 3.1.2. skim milk
+```{r}
+#analysis ref:http://rcompanion.org/handbook/I_09.html
+
+sm<-read.csv("/Volumes/efs/CANR/Ansci/D\'Amico\ Lab/Langsun_las17015/3.\ Glycolipid\ project/data/bacilli\ stats/M7_669_sm.csv",header = T)
+sm<-subset(sm, day!=0)
+
+#The autocorrelation structure
+model.a = gls(log10 ~ concen + day + concen*day,
+             data=sm)
+ACF(model.a,
+    form = ~ day | rep)
+
+
+# model
+
+model = gls(log10 ~ concen + day + concen*day,
+            correlation = corAR1(form = ~ day | rep,
+                                 value = -0.01),
+            data=sm,
+            method="REML")
+
+
+# vairance analysis
+Anova(model)
+
+# residule 
+x = residuals(model)
+plotNormalHistogram(x)
+
+# posthoc
+marginal = lsmeans(model,~concen*day, cov.reduce = FALSE)
+
+pairs = as.data.frame(pairs(marginal,
+      adjust="tukey"))
+pairs
+
+sm$log10 <- log10(sm$average*(10^(-sm$dilution)))
+sm$log10[sm$log10 == "-Inf"] <- "0"
+sm$log10<-as.numeric(sm$log10)
+
+Sum = Summarize(log10 ~ concen*day ,
+                    data   = sm,
+                    conf   = 0.95,
+                    digits = 3,
+                    traditional = FALSE,
+                    percentile  = TRUE)
+Sum
+
+# add asterisk compared to control
+sig=c(" ","***","***"," ",
+      "***","***","***"," ",
+      "***","***","***"," ",
+      "***","***","***"," ",
+      "***","***","***"," ",
+      "***","***","***"," ")
+
+sum1<-cbind(Sum,sig)
+
+sum1$concen.ord<-factor(sum1$concen,c("PC","10","50","100"))
+
+pd = position_dodge(.2)
+
+rm.bl.limit<-sum1
+rm.bl.limit$mean[rm.bl.limit$mean == "0"] <- "NA"
+rm.bl.limit$mean<-as.numeric(rm.bl.limit$mean)
+
+b2=rm.bl.limit
+p.b2=ggplot(b2, aes(x = day,y = mean, shape = concen.ord)) + 
+    geom_point(size=2) +  
+    scale_shape_manual(values=c(3,15,16,17),labels = c("Control","10", "50", "100")) + 
+    geom_line(size=0.4) +
+    geom_errorbar(aes(ymin=mean-sd,ymax=mean+sd),width=.3, size=0.7) +
+    geom_text(aes(label = b2$sig), vjust=2.3) + 
+    geom_text(aes(x=1, y=0.2,label = "^"), size=5, vjust=1.5) + 
+    geom_text(aes(x=3, y=0.2,label = "^"), size=5, vjust=1.5) + 
+    geom_text(aes(x=5, y=0.2,label = "^"), size=5, vjust=1.5) + 
+    geom_text(aes(x=7, y=0.2,label = "^"), size=5, vjust=1.5) + 
+    geom_text(aes(x=14, y=0.2,label = "^"), size=5, vjust=1.5) + 
+    geom_text(aes(x=21, y=0.2,label = "^"), size=5, vjust=1.5) + 
+    theme_bw() +
+    geom_hline(yintercept=4.29, linetype="dashed") +
+    theme(legend.title=element_blank(),panel.grid=element_blank(),legend.position="bottom",text = element_text(size=8),axis.text=element_text(size=8),legend.text=element_text(size=8)) +
+    ylab(expression(~italic("B. weihenstephanensis")~" (log CFU/mL) ")) + xlab("Time (d)") + ylim(0,8.5) 
+    #ggtitle("Skim milk")
+
+
+#ggsave(p,file="~/Desktop/M7-669.sm.jpeg",dpi=300,height = 4, width = 6)
+```
+
+## 3.2 spores
+```{r}
+m<-read.csv("/Volumes/efs/CANR/Ansci/D\'Amico\ Lab/Langsun_las17015/3.\ Glycolipid\ project/data/bacilli\ stats/spores/M7_669.csv",header = T)
+```
+### 3.2.1. whole milk
+```{r}
+# spores
+s.wm<-subset(m,!(m$milk=="skim"|m$cell=="TC"))
+
+# model 
+model = lm(log10 ~ factor(time)*con.,
+           data = s.wm)
+
+# variance analysis
+Anova(model, type = "II") 
+
+# residules
+x = residuals(model)
+plotNormalHistogram(x)
+
+marginal = lsmeans(model,~ time*con.)
+
+pairs = pairs(marginal,adjust="tukey")
+pairs
+
+Sum= Summarize(log10 ~ time * con.,
+          data=s.wm,
+          digits=3)
+Sum
+
+# add asterisk compared to control
+sig=c(" "," "," "," * ","***","***","***",
+      " "," "," "," "," "," "," ",
+      " "," "," "," "," "," "," ")
+
+sum1<-cbind(Sum,sig)
+
+pd = position_dodge(.2)
+
+p = ggplot(sum1, aes(x = time,y = mean, shape = con., color=con.)) + geom_point(size=4, position=pd) + geom_line() +
+    geom_errorbar(aes(ymin=mean-sd,
+                      ymax=mean+sd),
+                   width=.2, size=0.7, position=pd)  + scale_shape_discrete() + scale_color_grey(start = 0, end = 0.7) +
+    geom_text(aes(label = sum1$sig,y=mean), hjust=-0.5) +
+    theme_bw() +
+    theme(legend.title=element_blank(),panel.grid=element_blank()) +
+    ylab(expression(~italic("Bacillus weihenstephanensis")~" spore counts (log CFU/mL)")) + xlab("Time (h)") + ylim(0,8.5)
+
+p
+#ggsave(p,file="~/Desktop/M7-669.wm.s.png",height = 7, width = 10)
+
+```
+
+```{r}
+# total cell
+tc.wm<-subset(m,!(m$milk=="skim"|m$cell=="S"))
+
+# model 
+model = lm(log10 ~ factor(time)*con.,
+           data = tc.wm)
+
+# variance analysis
+Anova(model, type = "II") 
+
+# residules
+x = residuals(model)
+plotNormalHistogram(x)
+
+marginal = lsmeans(model,~ time*con.)
+
+pairs = pairs(marginal,adjust="tukey")
+pairs
+
+Sum= Summarize(log10 ~ time * con.,
+          data=tc.wm,
+          digits=3)
+Sum
+
+# add asterisk compared to control
+sig=c(" "," "," "," "," "," "," ",
+      " ","**","***","**","*","***","***",
+      " "," "," "," "," "," "," ")
+
+sum1<-cbind(Sum,sig)
+
+pd = position_dodge(.2)
+
+p = ggplot(sum1, aes(x = time,y = mean, shape = con., color=con.)) + geom_point(size=4, position=pd) + geom_line() +
+    geom_errorbar(aes(ymin=mean-sd,
+                      ymax=mean+sd),
+                   width=.2, size=0.7, position=pd)  + scale_shape_discrete() + scale_color_grey(start = 0, end = 0.7) +
+    geom_text(aes(label = sum1$sig,y=mean), hjust=-0.5) +
+    theme_bw() +
+    theme(legend.title=element_blank(),panel.grid=element_blank()) +
+    ylab(expression(~italic("Bacillus weihenstephanensis")~" total counts (log CFU/mL)")) + xlab("Time (h)") + ylim(0,8.5)
+
+p
+#ggsave(p,file="~/Desktop/M7-669.wm.tc.png",height = 7, width = 10)
+
+```
+
+
+### Bacillus weihenstephanensis s+tc figure whole milk
+```{r}
+bw.wm<-subset(m,!(m$milk=="skim"))
+
+Sum = Summarize(log10 ~ concen*time ,
+                    data   = bw.wm,
+                    conf   = 0.95,
+                    digits = 3,
+                    traditional = FALSE,
+                    percentile  = TRUE)
+Sum
+
+Sum$concen.ord<-factor(Sum$concen,c("control_tc","control_s","100_tc","100_s","200_tc","200_s"))
+
+b3=Sum
+p.b3=ggplot(b3, aes(x = time,y = mean, shape = concen.ord)) + 
+    geom_point(size=2) +  
+    scale_shape_manual(values=c(15,0,16,1,17,2),
+                       labels = c("Control_total cell","Control_spore",
+                                  "100_total cell","100_spore",
+                                  "200_total cell","200_spore")) + 
+    geom_line(size=0.4) +
+    #geom_errorbar(aes(ymin=mean-sd,ymax=mean+sd),width=.5, size=0.5) +
+    theme_bw() +
+    geom_hline(yintercept=4.30, linetype="dashed") +
+    geom_hline(yintercept=0.7) +
+    theme(legend.title=element_blank(),panel.grid=element_blank(),legend.position="bottom",text = element_text(size=8),axis.text=element_text(size=8),legend.text=element_text(size=8)) +
+    ylab(expression(~italic("B. weihenstephanensis")~" (log CFU/mL) ")) + xlab("Time (h)") + ylim(0,8.5) 
+    #ggtitle("Whole milk")
+
+
+#ggsave(p,file="~/Desktop/M7_669.wm_spore.jpeg",dpi=300,height = 4.5, width = 5)
+
+```
+
+
+### 3.2.2. skim milk
+```{r}
+# spores
+s.sm<-subset(m,!(m$milk=="whole"|m$cell=="TC"))
+
+# model 
+model = lm(log10 ~ factor(time)*con.,
+           data = s.sm)
+
+# variance analysis
+Anova(model, type = "II") 
+
+# residules
+x = residuals(model)
+plotNormalHistogram(x)
+
+marginal = lsmeans(model,~ time*con.)
+
+pairs = pairs(marginal,adjust="tukey")
+pairs
+
+Sum= Summarize(log10 ~ time * con.,
+          data=s.sm,
+          digits=3)
+Sum
+
+# add asterisk compared to control
+sig=c(" "," "," ","***","***","***","***",
+      " "," "," "," "," "," "," ",
+      " "," "," "," "," "," "," ")
+
+sum1<-cbind(Sum,sig)
+
+pd = position_dodge(.2)
+
+p = ggplot(sum1, aes(x = time,y = mean, shape = con., color=con.)) + geom_point(size=4, position=pd) + geom_line() +
+    geom_errorbar(aes(ymin=mean-sd,
+                      ymax=mean+sd),
+                   width=.2, size=0.7, position=pd)  + scale_shape_discrete() + scale_color_grey(start = 0, end = 0.7) +
+    geom_text(aes(label = sum1$sig,y=mean), hjust=-0.5) +
+    theme_bw() +
+    theme(legend.title=element_blank(),panel.grid=element_blank()) +
+    ylab(expression(~italic("Bacillus weihenstephanensis")~" spore counts (log CFU/mL)")) + xlab("Time (h)") + ylim(0,8.5)
+
+p
+#ggsave(p,file="~/Desktop/M7-669.sm.s.png",height = 7, width = 10)
+```
+
+```{r}
+# total cell
+tc.sm<-subset(m,!(m$milk=="whole"|m$cell=="S"))
+
+# model 
+model = lm(log10 ~ factor(time)*con.,
+           data = tc.sm)
+
+# variance analysis
+Anova(model, type = "II") 
+
+# residules
+x = residuals(model)
+plotNormalHistogram(x)
+
+marginal = lsmeans(model,~ time*con.)
+
+pairs = pairs(marginal,adjust="tukey")
+pairs
+
+Sum= Summarize(log10 ~ time * con.,
+          data=tc.sm,
+          digits=3)
+Sum
+
+# add asterisk compared to control
+sig=c(" ","***"," "," "," "," "," ",
+      "***","***","***"," "," "," "," ",
+      " "," "," "," "," "," "," ")
+
+sum1<-cbind(Sum,sig)
+
+pd = position_dodge(.2)
+
+p = ggplot(sum1, aes(x = time,y = mean, shape = con., color=con.)) + geom_point(size=4, position=pd) + geom_line() +
+    geom_errorbar(aes(ymin=mean-sd,
+                      ymax=mean+sd),
+                   width=.2, size=0.7, position=pd)  + scale_shape_discrete() + scale_color_grey(start = 0, end = 0.7) +
+    geom_text(aes(label = sum1$sig,y=mean), hjust=-0.5) +
+    theme_bw() +
+    theme(legend.title=element_blank(),panel.grid=element_blank()) +
+    ylab(expression(~italic("Bacillus weihenstephanensis")~" total counts (log CFU/mL)")) + xlab("Time (h)") + ylim(0,8.5)
+
+p
+#ggsave(p,file="~/Desktop/M7-669.sm.tc.png",height = 7, width = 10)
+```
+### Bacillus weihenstephanensis s+tc figure skim milk
+```{r}
+bw.sm<-subset(m,!(m$milk=="whole"))
+
+Sum = Summarize(log10 ~ concen*time ,
+                    data   = bw.sm,
+                    conf   = 0.95,
+                    digits = 3,
+                    traditional = FALSE,
+                    percentile  = TRUE)
+Sum
+
+Sum$concen.ord<-factor(Sum$concen,c("control_tc","control_s","25_tc","25_s","50_tc","50_s"))
+
+b4=Sum
+p.b4=ggplot(b4, aes(x = time,y = mean, shape = concen.ord)) + 
+    geom_point(size=2) +  
+    scale_shape_manual(values=c(15,0,16,1,17,2),
+                       labels = c("Control_total cell","Control_spore",
+                                  "25_total cell","25_spore",
+                                  "50_total cell","50_spore")) + 
+    geom_line(size=0.4) +
+    #geom_errorbar(aes(ymin=mean-sd,ymax=mean+sd),width=.5, size=0.5) +
+    theme_bw() +
+    geom_hline(yintercept=4.26, linetype="dashed") +
+    geom_hline(yintercept=0.7) +
+    theme(legend.title=element_blank(),panel.grid=element_blank(),legend.position="bottom",text = element_text(size=8),axis.text=element_text(size=8),legend.text=element_text(size=8)) +
+    ylab(expression(~italic("B. weihenstephanensis")~" (log CFU/mL) ")) + xlab("Time (h)") + ylim(0,8.5) 
+    #ggtitle("Skim milk")
+
+
+#ggsave(p,file="~/Desktop/M7-669.sm_spore.jpeg",dpi=300,height = 4.5, width = 5)
+
+```
+
+# combine graph
+```{r}
+library(cowplot)
+fig4 <- plot_grid(p.a4, p.b4, p.c4,
+          labels = c("A","B","C"),label_size = 9,
+          ncol = 1, nrow = 3)
+ggsave(fig4, file="fig4.jpeg",dpi=600, height = 24, width = 8.9, unit="cm")
+```
+
+
+# growth parameters code
+```{r}
+library(nlsMicrobio)
+df=subset(wm,wm$concen=="PC")
+df=select(df,c(2,9))
+names(df)[2] <- "LOG10N"
+names(df)[1] <- "t"
+nls1 <- nls(baranyi, df,list(lag=1, mumax=1, LOG10N0 = 4, LOG10Nmax = 8))
+nls1
+plotfit(nls1,smooth=T)
+
+df=subset(sm,sm$concen=="PC")
+df=select(df,c(2,9))
+names(df)[2] <- "LOG10N"
+names(df)[1] <- "t"
+nls1 <- nls(baranyi, df,list(lag=1, mumax=1, LOG10N0 = 4, LOG10Nmax = 8))
+nls1
+plotfit(nls1,smooth=T)
+```
+

@@ -1,0 +1,586 @@
+---
+title: "R Notebook"
+output:
+  html_document: default
+  html_notebook: default
+---
+# 0 count trials were replaced with the average count of 0.5 [based on limit of detection/2], as 0 cannot be log transferred for statistical analysis.
+
+# 1. load library
+```{r}
+library(nlme)
+library(car)
+library(multcompView)
+library(multcomp)
+library(lsmeans)
+library(rcompanion)
+library(dplyr)
+library(reshape2)
+library(ggplot2)
+library(FSA)
+library(ggpattern)
+```
+
+
+# 2. Milk (Repeated Measures ANOVA)
+## whole milk
+```{r}
+options(width=120)
+#analysis ref:http://rcompanion.org/handbook/I_09.html
+
+wm<-read.csv("/Volumes/efs/CANR/Ansci/D\'Amico\ Lab/Langsun_las17015/Glycolipid\ project/data/statistics/wholemilk.csv",header = T)
+wm1<-subset(wm, Time!=0)
+
+#The autocorrelation structure
+model.a = gls(log10 ~ concen + Time + concen*Time,
+             data=wm)
+ACF(model.a,
+    form = ~ Time | rep)
+
+
+# model
+model = gls(log10 ~ concen + Time + concen*Time,
+            correlation = corAR1(form = ~ Time | rep,
+                                 value = 0.1988),
+            data=wm,
+            method="REML")
+
+summary(model)
+
+# variance analysis
+Anova(model)
+
+# residule 
+x = residuals(model)
+library(rcompanion)
+plotNormalHistogram(x)
+
+#posthoc
+marginal = lsmeans(model,~concen*Time, cov.reduce = FALSE)
+
+pairs = as.data.frame(pairs(marginal,
+      adjust="tukey"))
+pairs
+
+Sum = Summarize(log10 ~ concen*Time ,
+                    data   = wm1,
+                    conf   = 0.95,
+                    digits = 3,
+                    traditional = FALSE,
+                    percentile  = TRUE)
+
+Sum
+
+# add asterisk compared to control
+sig=c(" "," "," "," ",
+      " "," ","*"," ",
+      " "," ","*"," ",
+      " "," ","***"," ",
+      " "," "," "," ",
+      " "," "," "," ")
+
+sum1<-cbind(Sum,sig)
+
+sum1$concen.ord<-factor(sum1$concen,c("control","1000","1400","2000"))
+
+p=ggplot(sum1, aes(x = Time,y = mean, shape = concen.ord)) + 
+    geom_point(size=3) +  
+    scale_shape_manual(values=c(15,16,17,0),labels = c("SDW control","1000 mg/L","1400 mg/L","2000  mg/L")) + 
+    geom_line() +
+    geom_errorbar(aes(ymin=mean-sd,ymax=mean+sd),width=.3, size=0.7) +
+    geom_text(aes(label = sum1$sig), vjust=2) + 
+    theme_bw() +
+    geom_hline(yintercept=4, linetype="dashed") +
+    theme(legend.title=element_blank(),panel.grid=element_blank()) +
+    ylab(expression(~italic("L. monocytogenes")~" counts (log CFU/mL)")) + xlab("Time (d)") + ylim(0,8.5)
+
+p
+
+#old figure setting
+#p=ggplot(sum1, aes(x = Time,y = mean, shape = concen.ord, color=concen.ord)) + 
+#    geom_point(size=4) + geom_line() +
+#    geom_errorbar(aes(ymin=mean-sd,ymax=mean+sd),
+#                      width=.3, size=0.7)  + scale_shape_discrete(labels = c("Control","1000 #mg/L","1400 mg/L","2000 mg/L")) + scale_color_grey(labels = c("Control","1000 mg/L","1400 #mg/L","2000 mg/L"),start = 0, end = 0.7) +
+#    geom_text(aes(label = sum1$sig), hjust=-0.4) +
+#    theme_bw() +
+#    theme(legend.title=element_blank(),panel.grid=element_blank()) +
+#    ylab(expression(~italic("L. monocytogenes")~" counts (log CFU/mL)")) + xlab("Time (d)") + #ylim(0,8.5)
+
+#ggsave(p,file="~/Desktop/lm.wm.jpeg",dpi=300,height = 4, width = 6)
+```
+## skim milk
+```{r}
+sm<-read.csv("/Volumes/efs/CANR/Ansci/D\'Amico\ Lab/Langsun_las17015/Glycolipid\ project/data/statistics/skimmilk.csv",header = T)
+sm1<-subset(sm, Time!=0)
+
+#The autocorrelation structure
+model.a = gls(log10 ~ concen + Time + concen*Time,
+             data=sm1)
+ACF(model.a,
+    form = ~ Time | rep)
+
+
+# model
+model = gls(log10 ~ concen + Time + concen*Time,
+            correlation = corAR1(form = ~ Time | rep,
+                                 value = 0.1753),
+            data=sm,
+            method="REML")
+
+summary(model)
+
+# variance analysis
+Anova(model)
+
+# residule 
+x = residuals(model)
+plotNormalHistogram(x)
+
+#posthoc
+marginal = lsmeans(model,~concen*Time, cov.reduce = FALSE)
+pairs = as.data.frame(pairs(marginal,
+      adjust="tukey"))
+pairs
+
+#summary
+Sum = Summarize(log10 ~ concen*Time ,
+                    data   = sm1,
+                    conf   = 0.95,
+                    digits = 3,
+                    traditional = FALSE,
+                    percentile  = TRUE)
+
+Sum
+
+# add asterisk compared to control
+sig=c("**      ","**      ","***      "," "," "," ",
+      "***      ","***      ","***      "," "," "," ",
+      "***","***","***"," "," "," ",
+      "***","***      ","***      "," "," "," ",
+      " ","***","***"," "," "," ",
+      " "," "," "," "," "," ")
+
+sum1<-cbind(Sum,sig)
+
+sum1$concen.ord<-factor(sum1$concen,c("control","500","700","1000","1300","1500"))
+
+rm.bl.limit<-sum1
+rm.bl.limit$mean[rm.bl.limit$mean == "-0.3"] <- "NA"
+rm.bl.limit$mean<-as.numeric(rm.bl.limit$mean)
+
+p=ggplot(rm.bl.limit, aes(x = Time,y = mean, shape = concen.ord)) + 
+    geom_point(size=3) +  
+    scale_shape_manual(values=c(15,16,17,0,1,2),labels = c("SDW control","500 mg/L","700 mg/L", "1000 mg/L","1300 mg/L","1500 mg/L")) + 
+    geom_line() +
+    geom_errorbar(aes(ymin=mean-sd,ymax=mean+sd),width=.3, size=0.7) +
+    geom_text(aes(label = rm.bl.limit$sig), vjust=2.5) + 
+    geom_text(aes(x=21, y=0.2,label = "^"), size=5, vjust=1.5) + 
+    theme_bw() +
+    geom_hline(yintercept=4, linetype="dashed") +
+    theme(legend.title=element_blank(),panel.grid=element_blank()) +
+    ylab(expression(~italic("L. monocytogenes")~" counts (log CFU/mL)")) + xlab("Time (d)") + ylim(-0.2,8.5)
+
+p
+
+#p=ggplot(sum1, aes(x = Time,y = mean, shape = concen.ord, color=concen.ord)) + 
+#    geom_point(size=4) + geom_line() +
+#    geom_errorbar(aes(ymin=mean-sd,ymax=mean+sd),
+#                      width=.3, size=0.7)  +      
+#    scale_color_grey(labels = c("Control mg/L","500 mg/L","700 mg/L", "1000 mg/L","1300 #mg/L","1500 mg/L")) + 
+#    scale_shape_discrete(labels = c("Control mg/L","500 mg/L","700 mg/L", "1000 mg/L","1300 #mg/L","1500 mg/L")) +
+#    geom_text(aes(label = sum1$sig), hjust=-0.4) +
+#    theme_bw() +
+#    theme(legend.title=element_blank(),panel.grid=element_blank()) +
+#    ylab(expression(~italic("L. monocytogenes")~" counts (log CFU/mL)")) + xlab("Time (d)") + #ylim(-1,8.5) + geom_hline(yintercept=0, linetype="dashed", color = "grey", size=1)
+
+#ggsave(p,file="~/Desktop/lm.sm1.jpeg",dpi=300,height = 4, width = 6)
+```
+
+```{r,include=FALSE}
+skimmilk<-read.csv("/Volumes/efs/CANR/Ansci/D\'Amico\ Lab/Langsun_las17015/Glycolipid\ project/data/statistics/skimmilk.csv",header = T)
+
+skimmilk2<-subset(skimmilk,!(skimmilk$concen=="700"|skimmilk$concen=="1300"))
+
+sm=subset(skimmilk2,skimmilk2$Time!="0")
+sm$Time = factor(sm$Time,
+                   levels=c("1", "3", "5", "7","14","21"))
+
+###### skim milk only keep 500, 1000, and 1500. 700 and 1300 not shown
+# model
+model = lm(log10 ~ concen*Time + rep,
+           data = sm)
+
+# variance analysis
+library(car)
+Anova(model,
+      type = "II")
+
+# residule 
+x = residuals(model)
+
+library(rcompanion)
+
+plotNormalHistogram(x)
+
+# post hoc
+library(multcompView)
+library(lsmeans)
+
+marginal = lsmeans(model,
+                   ~ concen*Time)
+
+pairs = as.data.frame(pairs(marginal,
+      adjust="tukey"))
+pairs
+
+CLD = cld(marginal,
+          alpha   = 0.05,
+          Letters = letters,    
+          adjust  = "tukey") 
+CLD
+
+library(rcompanion)
+library(FSA)
+
+Sum = Summarize(log10 ~ concen + Time,
+          data=skimmilk2,
+          digits=3)
+
+Sum
+
+# add asterisk compared to control
+sig=c(" "," "," "," ",
+      "***","***"," "," ",
+      "***","***","***"," ",
+      "***","***","***"," ",
+      "***","***"," "," ",
+      "***","***"," "," ",
+      " ","***"," "," ")
+
+sum1<-cbind(Sum,sig)
+
+sum1$concen.ord<-factor(sum1$concen,c("500","1000","1500","control"))
+
+pd = position_dodge(.2)
+
+p=ggplot(sum1, aes(x = Time,y = mean, color = concen.ord)) + geom_point(shape=15, size=4, position=pd) + geom_line() +
+    geom_errorbar(aes(ymin=mean-sd,
+                      ymax=mean+sd),
+                   width=.2, size=0.7, position=pd) + scale_color_grey(labels = c("500 mg/L",  "1000 mg/L","1500 mg/L","Control")) +
+    geom_text(aes(label = sum1$sig,y=mean), hjust=-0.5) +
+    theme_bw() +
+    theme(legend.title=element_blank(),panel.grid=element_blank()) +
+    ylab(expression(~italic("L. monocytogenes")~" counts (log CFU/mL)")) + xlab("Time (d)") + ylim(-1,8.5) + geom_hline(yintercept=0, linetype="dashed", color = "grey", size=1)
+
+p
+
+#ggsave(p,file="~/Desktop/lm.sm2.png",height = 7, width = 10)
+
+```
+
+
+
+
+# 3. Cheese (Two-way ANOVA, followed by one-way ANOVA)
+## cheese
+```{r}
+# analysis ref: https://rcompanion.org/handbook/I_08.html
+
+cheese1<-read.csv("/Volumes/efs/CANR/Ansci/D\'Amico\ Lab/Langsun_las17015/Glycolipid\ project/data/statistics/cheese.csv",header = T)
+
+# combine technical reps and get the average
+cheese<-aggregate(cheese1[, 6], list(cheese1$reps, cheese1$sample,cheese1$day,cheese1$treatment, cheese1$rep),mean)
+colnames(cheese) <- c("reps","sample","day","treatment","rep","log10")
+
+#remove day 28 and 35 for analysis, cause we are not gonna report them
+cheese <- subset(cheese, cheese$day!="28")
+cheese <- subset(cheese, cheese$day!="35")
+
+# model
+model = lm(log10 ~ day+treatment+day*treatment, data=cheese)
+# two way anova
+Anova(model, type = "II")
+# residule 
+x = residuals(model)
+plotNormalHistogram(x)
+#posthoc
+marginal = lsmeans(model,
+                   ~ treatment)
+pairs(marginal,
+      adjust="tukey")
+
+#one way anova at each time point
+# day1
+aov=aov(log10 ~ treatment, data=subset(cheese,cheese$day=="1"))
+marginal = lsmeans(aov,~ treatment)
+pairs(marginal,adjust="tukey")
+cld(marginal,
+          alpha   = 0.05,
+          Letters = letters,    
+          adjust  = "tukey")
+# day7
+aov=aov(log10 ~ treatment, data=subset(cheese,cheese$day=="7"))
+marginal = lsmeans(aov,~ treatment)
+pairs(marginal,adjust="tukey")
+cld(marginal,
+          alpha   = 0.05,
+          Letters = letters,    
+          adjust  = "tukey")
+# day14
+aov=aov(log10 ~ treatment, data=subset(cheese,cheese$day=="14"))
+marginal = lsmeans(aov,~ treatment)
+pairs(marginal,adjust="tukey")
+cld(marginal,
+          alpha   = 0.05,
+          Letters = letters,    
+          adjust  = "tukey")
+# day21
+aov=aov(log10 ~ treatment, data=subset(cheese,cheese$day=="21"))
+marginal = lsmeans(aov,~ treatment)
+pairs(marginal,adjust="tukey")
+cld(marginal,
+          alpha   = 0.05,
+          Letters = letters,    
+          adjust  = "tukey")
+```
+## cheese graph
+```{r}
+cheese.pic<-read.csv("/Volumes/efs/CANR/Ansci/D\'Amico\ Lab/Langsun_las17015/Glycolipid\ project/data/statistics/figure/cheese.csv",header = T)
+
+cheese.pic$concen.ord<-factor(cheese.pic$concen,c("control","DI","5","10","15","20"))
+
+#p<-ggplot(cheese.pic, aes(factor(day), y=ave,fill=concen.ord)) +
+#  geom_bar(stat="identity", position = "dodge",color="black") +
+#  geom_errorbar(aes(ymin = ave-std, ymax = ave+std), width =0.25,position=position_dodge(0.9)) #+
+#  geom_text(aes(label = cheese.pic$group,y=ave+std),vjust=-1,position=position_dodge(0.9))+
+#  scale_fill_grey(labels = c("Control","SDW control","5%",  "10%","15%","20%"),start = 0, end #= 1) +
+#  ylab(expression(~italic("L. monocytogenes")~"counts (log CFU per gram)")) + xlab("Time (d)") #+
+#  theme(legend.title=element_blank(),panel.background = element_blank(), #panel.grid=element_blank(), axis.line=element_line('black'),strip.placement = "outside")
+
+#previous figure was above, but want to add patterns
+# install.packages("remotes")
+#remotes::install_github("coolbutuseless/ggpattern")
+
+p<-ggplot(cheese.pic, aes(factor(day), y=ave, pattern_type = concen.ord,fill=concen.ord)) +
+  geom_bar_pattern(stat="identity", position = "dodge",color="black",pattern = 'magick',pattern_fill="white") +
+  scale_pattern_type_manual(values = c('hexagons', 'left45', 'crosshatch', 'right45', 'checkerboard', "left45"),labels = c("Control","SDW control","5%",  "10%","15%","20%")) +
+  geom_errorbar(aes(ymin = ave-std, ymax = ave+std), width =0.25,position=position_dodge(0.9)) +
+  geom_text(aes(label = cheese.pic$group,y=ave+std),vjust=-1,position=position_dodge(0.9))+
+  scale_fill_grey(labels = c("Control","SDW control","5%",  "10%","15%","20%"),start = 0, end = 1) +
+  ylab(expression(~italic("L. monocytogenes")~"counts (log CFU per gram)")) + xlab("Time (d)") +
+  theme(legend.title=element_blank(),panel.background = element_blank(), panel.grid=element_blank(), axis.line=element_line('black'),strip.placement = "outside")
+
+p
+#ggsave(p,file="~/Desktop/lm.cheese.jpeg",height = 5, width = 8)
+```
+
+
+# 4. Biofilm (Two-way ANOVA, followed by one-way ANOVA)
+## inhibition
+### stainless steel inhibition
+```{r}
+steel_inhi<- read.csv("/Volumes/efs/CANR/Ansci/D\'Amico\ Lab/Langsun_las17015/Glycolipid\ project/data/statistics/steel_un_inhi.csv",header=T)
+
+s.inhi=subset(steel_inhi,steel_inhi$time!="0")
+s.inhi$time = factor(s.inhi$time,
+                   levels=c("24","48"))
+
+#linear model
+model = lm(log10.per.coupon ~ concentration*time,
+           data = s.inhi)
+
+# two way anova
+Anova(model,
+      type = "II")
+
+# residule normality
+x = residuals(model)
+plotNormalHistogram(x)
+
+#one way anova at each time point
+# 24h
+aov=aov(log10.per.coupon ~ concentration, data=subset(s.inhi,s.inhi$time=="24"))
+marginal = lsmeans(aov,~ concentration)
+pairs(marginal,adjust="tukey")
+cld(marginal,
+          alpha   = 0.05,
+          Letters = letters,    
+          adjust  = "tukey")
+# 48h
+aov=aov(log10.per.coupon ~ concentration, data=subset(s.inhi,s.inhi$time=="48"))
+marginal = lsmeans(aov,~ concentration)
+pairs(marginal,adjust="tukey")
+cld(marginal,
+          alpha   = 0.05,
+          Letters = letters,    
+          adjust  = "tukey")
+
+```
+#### polystyrene inhibition 
+```{r}
+poly_inhi<- read.csv("/Volumes/efs/CANR/Ansci/D\'Amico\ Lab/Langsun_las17015/Glycolipid\ project/data/statistics/poly_un_inhi.csv",header=T)
+
+p.inhi=subset(poly_inhi,poly_inhi$time!="0")
+p.inhi$time = factor(p.inhi$time,
+                   levels=c("24","48"))
+
+#linear model
+model = lm(log10_well ~ concentration*time,
+           data = p.inhi)
+
+# two way anova
+Anova(model,
+      type = "II")
+
+# residule normality
+x = residuals(model)
+plotNormalHistogram(x)
+
+#one way anova at each time point
+# 24h
+aov=aov(log10_well ~ concentration, data=subset(p.inhi,p.inhi$time=="24"))
+marginal = lsmeans(aov,~ concentration)
+pairs(marginal,adjust="tukey")
+cld(marginal,
+          alpha   = 0.05,
+          Letters = letters,    
+          adjust  = "tukey")
+# 48h
+aov=aov(log10_well ~ concentration, data=subset(p.inhi,p.inhi$time=="48"))
+marginal = lsmeans(aov,~ concentration)
+pairs(marginal,adjust="tukey")
+cld(marginal,
+          alpha   = 0.05,
+          Letters = letters,    
+          adjust  = "tukey")
+```
+### inhi graph
+```{r}
+inhi.pic<-read.csv("/Volumes/efs/CANR/Ansci/D\'Amico\ Lab/Langsun_las17015/3.\ Glycolipid\ project/data/statistics/figure/inhi.csv",header = T)
+
+inhi.pic$concen.ord<-factor(inhi.pic$concen,c("control","1.6"))
+
+p<-ggplot(inhi.pic, aes(factor(time), y=ave,fill=concen.ord)) +
+  geom_bar(stat="identity", position = "dodge",color="black")+
+  geom_errorbar(aes(ymin = ave-std, ymax = ave+std), width = 0.25,position=position_dodge(0.9))+
+  facet_grid(.~material,switch = "both")+
+  geom_text(aes(label = inhi.pic$group,y=ave+std),vjust=-1,position=position_dodge(0.9))+
+  scale_fill_grey(labels = c("G1 (1.6 mg/L)","SDW control"))+
+  ylab(expression(~italic("L. monocytogenes")~"counts (log CFU per well or round)")) + xlab("Time (h)") +
+  theme(legend.title=element_blank(),panel.background = element_blank(), panel.grid=element_blank(), axis.line=element_line('black'),strip.placement = "outside")
+
+p
+#ggsave(p,file="~/Desktop/lm.inhi.jpeg",dpi = 300, height = 5, width = 6)
+```
+
+
+
+## inactivation
+### stainless steel inactivation
+```{r}
+steel_inacti<- read.csv("/Volumes/efs/CANR/Ansci/D\'Amico\ Lab/Langsun_las17015/Glycolipid\ project/data/statistics/steel_un_inacti.csv",header=T)
+
+s.inact=subset(steel_inacti,steel_inacti$time!="0")
+s.inact$time = factor(s.inact$time,
+                   levels=c("1","4"))
+
+#linear model
+model = lm(log10per_coupon ~ concentration*time,
+           data = s.inact)
+
+# two way anova
+Anova(model, type = "II")
+
+# residule normality
+x = residuals(model)
+plotNormalHistogram(x)
+
+#post hoc
+marginal = lsmeans(model,~ concentration)
+pairs(marginal,adjust="tukey")
+
+#one way anova at each time point
+# 1h
+aov=aov(log10per_coupon ~ concentration, data=subset(s.inact,s.inact$time=="1"))
+marginal = lsmeans(aov,~ concentration)
+pairs(marginal,adjust="tukey")
+cld(marginal,
+          alpha   = 0.05,
+          Letters = letters,    
+          adjust  = "tukey")
+
+# 4h
+aov=aov(log10per_coupon ~ concentration, data=subset(s.inact,s.inact$time=="4"))
+marginal = lsmeans(aov,~ concentration)
+pairs(marginal,adjust="tukey")
+cld(marginal,
+          alpha   = 0.05,
+          Letters = letters,    
+          adjust  = "tukey")
+```
+### polystyrene inactivation
+```{r}
+poly_un<- read.csv("/Volumes/efs/CANR/Ansci/D\'Amico\ Lab/Langsun_las17015/Glycolipid\ project/data/statistics/poly_un_inacti.csv",header=T)
+
+p.inact=subset(poly_un,!(poly_un$time_h=="0"|poly_un$concentration_ppm=="22.5"|poly_un$concentration_ppm=="90"))
+p.inact$time_h = factor(p.inact$time_h,
+                   levels=c("1","4"))
+
+#linear model
+model = lm(log10_well ~ concentration_ppm*time_h,
+           data = p.inact)
+
+# two way anova
+Anova(model, type = "II")
+
+# residule normality
+x = residuals(model)
+plotNormalHistogram(x)
+
+#post hoc
+marginal = lsmeans(model,~ concentration_ppm)
+pairs(marginal, adjust="tukey")
+
+#one way anova at each time point
+# 1h
+aov=aov(log10_well ~ concentration_ppm, data=subset(p.inact,p.inact$time_h=="1"))
+marginal = lsmeans(aov,~ concentration_ppm)
+pairs(marginal,adjust="tukey")
+cld(marginal,
+          alpha   = 0.05,
+          Letters = letters,    
+          adjust  = "tukey")
+
+# 4h
+aov=aov(log10_well ~ concentration_ppm, data=subset(p.inact,p.inact$time_h=="4"))
+marginal = lsmeans(aov,~ concentration_ppm)
+pairs(marginal,adjust="tukey")
+cld(marginal,
+          alpha   = 0.05,
+          Letters = letters,    
+          adjust  = "tukey")
+```
+
+### inacti graph
+```{r}
+inacti.pic<-read.csv("/Volumes/efs/CANR/Ansci/D\'Amico\ Lab/Langsun_las17015/Glycolipid\ project/data/statistics/figure/inacti.csv",header = T)
+
+inacti.pic$concen.ord<-factor(inacti.pic$concen,c("PBS","H2O","4.5","45","450"))
+
+p<-ggplot(inacti.pic, aes(factor(time), y=ave,fill=concen.ord,pattern = concen.ord,pattern_angle = concen.ord)) +
+  geom_bar_pattern(stat="identity", position = "dodge",color="black",pattern_spacing = 0.025)+
+  geom_errorbar(aes(ymin = ave-std, ymax = ave+std), width = 0.25,position=position_dodge(0.9))+
+  facet_grid(.~materials,switch = "both")+
+  geom_text(aes(label = inacti.pic$group,y=ave+std),vjust=-1,position=position_dodge(0.9))+
+  scale_fill_grey(labels = c("PBS control","SDW control","4.5 mg/L","45 mg/L","450 mg/L"),start = 0.3, end = 1)+
+  scale_pattern_discrete(labels = c("PBS control","SDW control","4.5 mg/L","45 mg/L","450 mg/L"))+
+  scale_pattern_angle_discrete(labels = c("PBS control","SDW control","4.5 mg/L","45 mg/L","450 mg/L"))+
+  ylab(expression(~italic("L. monocytogenes")~"counts (log CFU per well or round)")) + xlab("Time (h)") +
+  theme(legend.title=element_blank(),panel.background = element_blank(), panel.grid=element_blank(), axis.line=element_line('black'),strip.placement = "outside")+
+  ylim(0,8.5)
+
+p
+
+#ggsave(p,file="~/Desktop/lm.inacti.jpeg",dpi=300,height = 5, width = 7)
+```
+
